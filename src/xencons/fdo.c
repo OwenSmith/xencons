@@ -2194,6 +2194,84 @@ fail1:
 }
 
 static DECLSPEC_NOINLINE NTSTATUS
+FdoDispatchControl(
+    IN  PXENCONS_FDO    Fdo,
+    IN  PIRP            Irp
+    )
+{
+    PIO_STACK_LOCATION  StackLocation;
+    ULONG               IoControlCode;
+    ULONG               InputBufferLength;
+    ULONG               OutputBufferLength;
+    PVOID               Buffer;
+    PCHAR               Value;
+    ULONG               Length;
+    NTSTATUS            status;
+
+    UNREFERENCED_PARAMETER(Fdo);
+
+    StackLocation = IoGetCurrentIrpStackLocation(Irp);
+    IoControlCode = StackLocation->Parameters.DeviceIoControl.IoControlCode;
+    InputBufferLength = StackLocation->Parameters.DeviceIoControl.InputBufferLength;
+    OutputBufferLength = StackLocation->Parameters.DeviceIoControl.OutputBufferLength;
+    Buffer = Irp->AssociatedIrp.SystemBuffer;
+
+    switch (IoControlCode) {
+    case IOCTL_XENCONS_GET_INSTANCE:
+        Value = "0";
+        break;
+    case IOCTL_XENCONS_GET_NAME:
+        Value = "default";
+        break;
+    case IOCTL_XENCONS_GET_PROTOCOL:
+        Value = "vt100";
+        break;
+    default:
+        status = STATUS_NOT_SUPPORTED;
+        goto fail1;
+    }
+    Length = (ULONG)strlen(Value);
+
+    status = STATUS_INVALID_PARAMETER;
+    if (InputBufferLength != 0)
+        goto fail2;
+
+    Irp->IoStatus.Information = Length;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (OutputBufferLength == 0)
+        goto done;
+
+    RtlZeroMemory(Buffer, OutputBufferLength);
+
+    if (OutputBufferLength < Length)
+        goto fail3;
+
+    RtlCopyMemory(Buffer, Value, Length);
+    status = STATUS_SUCCESS;
+
+done:
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+
+fail3:
+    Error("fail3\n");
+
+fail2:
+    Error("fail2\n");
+
+fail1:
+    Error("fail1 (%08x)\n", status);
+
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+}
+
+static DECLSPEC_NOINLINE NTSTATUS
 FdoDispatchDefault(
     IN  PXENCONS_FDO    Fdo,
     IN  PIRP            Irp
@@ -2248,6 +2326,10 @@ FdoDispatch(
     case IRP_MJ_READ:
     case IRP_MJ_WRITE:
         status = FdoDispatchReadWrite(Fdo, Irp);
+        break;
+
+    case IRP_MJ_DEVICE_CONTROL:
+        status = FdoDispatchControl(Fdo, Irp);
         break;
 
     default:
