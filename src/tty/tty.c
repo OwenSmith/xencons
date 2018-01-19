@@ -413,6 +413,11 @@ _tmain(
     if (Context->Device.Read == INVALID_HANDLE_VALUE)
         ExitProcess(1);
 
+    // add a small delay here, to prevent the second CreateFile returning with
+    // all pipe instances busy - this gives the server end some time to spawn
+    // the read pipe and return to ConnectNamedPipe
+    Sleep(50);
+
     Context->Device.Write = CreateFile(PIPE_NAME,
                                        GENERIC_WRITE,
                                        FILE_SHARE_READ | FILE_SHARE_WRITE,
