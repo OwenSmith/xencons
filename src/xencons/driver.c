@@ -202,6 +202,12 @@ Dispatch(
 
     status = STATUS_NOT_SUPPORTED;
     switch (Dx->Type) {
+    case PHYSICAL_DEVICE_OBJECT: {
+        PXENCONS_PDO Pdo = Dx->Pdo;
+
+        status = PdoDispatch(Pdo, Irp);
+        break;
+    }
     case FUNCTION_DEVICE_OBJECT: {
         PXENCONS_FDO Fdo = Dx->Fdo;
 

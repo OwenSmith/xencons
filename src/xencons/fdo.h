@@ -40,6 +40,49 @@
 
 #include "driver.h"
 
+extern PCHAR
+FdoGetVendorName(
+    IN  PXENCONS_FDO    Fdo
+    );
+
+extern PCHAR
+FdoGetName(
+    IN  PXENCONS_FDO    Fdo
+    );
+
+extern NTSTATUS
+FdoAddPhysicalDeviceObject(
+    IN  PXENCONS_FDO    Fdo,
+    IN  PXENCONS_PDO    Pdo
+    );
+
+extern VOID
+FdoRemovePhysicalDeviceObject(
+    IN  PXENCONS_FDO    Fdo,
+    IN  PXENCONS_PDO    Pdo
+    );
+
+extern VOID
+FdoAcquireMutex(
+    IN  PXENCONS_FDO    Fdo
+    );
+
+extern VOID
+FdoReleaseMutex(
+    IN  PXENCONS_FDO    Fdo
+    );
+
+extern PDEVICE_OBJECT
+FdoGetPhysicalDeviceObject(
+    IN  PXENCONS_FDO    Fdo
+    );
+
+extern NTSTATUS
+FdoDelegateIrp(
+    IN  PXENCONS_FDO    Fdo,
+    IN  PIRP            Irp
+    );
+
 extern NTSTATUS
 FdoDispatch(
     IN  PXENCONS_FDO    Fdo,
