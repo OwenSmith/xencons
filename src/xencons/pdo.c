@@ -36,6 +36,8 @@
 #include <ntstrsafe.h>
 #include <stdlib.h>
 
+#include <xencons_device.h>
+
 #include "names.h"
 #include "fdo.h"
 #include "pdo.h"
@@ -436,6 +438,9 @@ PdoD3ToD0(
 
     KeLowerIrql(Irql);
 
+#pragma prefast(suppress:28123)
+    (VOID) IoSetDeviceInterfaceState(&Pdo->Dx->Link, TRUE);
+
     return STATUS_SUCCESS;
 
 fail3:
@@ -465,6 +470,9 @@ PdoD0ToD3(
     KIRQL               Irql;
 
     ASSERT3U(KeGetCurrentIrql(), == , PASSIVE_LEVEL);
+
+#pragma prefast(suppress:28123)
+    (VOID) IoSetDeviceInterfaceState(&Pdo->Dx->Link, FALSE);
 
     KeRaiseIrql(DISPATCH_LEVEL, &Irql);
 
@@ -518,8 +526,20 @@ PdoStartDevice(
     IN  PIRP            Irp
     )
 {
+    PXENCONS_DX         Dx = Pdo->Dx;
     NTSTATUS            status;
 
+    if (Dx->Link.Length != 0)
+        goto done;
+
+    status = IoRegisterDeviceInterface(__PdoGetDeviceObject(Pdo),
+                                       &GUID_XENCONS_DEVICE,
+                                       NULL,
+                                       &Dx->Link);
+    if (!NT_SUCCESS(status))
+        goto fail1;
+
+done:
     status = PdoD3ToD0(Pdo);
     if (!NT_SUCCESS(status))
         goto fail1;
@@ -1562,6 +1582,163 @@ PdoDispatchPower(
 }
 
 static DECLSPEC_NOINLINE NTSTATUS
+PdoDispatchCreate(
+    IN  PXENCONS_PDO    Pdo,
+    IN  PIRP            Irp
+    )
+{
+    NTSTATUS            status;
+
+    UNREFERENCED_PARAMETER(Pdo);
+
+    status = STATUS_SUCCESS;
+
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+}
+
+static DECLSPEC_NOINLINE NTSTATUS
+PdoDispatchCleanup(
+    IN  PXENCONS_PDO    Pdo,
+    IN  PIRP            Irp
+    )
+{
+    NTSTATUS            status;
+
+    UNREFERENCED_PARAMETER(Pdo);
+
+    status = STATUS_SUCCESS;
+
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+}
+
+static DECLSPEC_NOINLINE NTSTATUS
+PdoDispatchClose(
+    IN  PXENCONS_PDO    Pdo,
+    IN  PIRP            Irp
+    )
+{
+    NTSTATUS            status;
+
+    UNREFERENCED_PARAMETER(Pdo);
+
+    status = STATUS_SUCCESS;
+
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+}
+
+static DECLSPEC_NOINLINE NTSTATUS
+PdoDispatchReadWrite(
+    IN  PXENCONS_PDO    Pdo,
+    IN  PIRP            Irp
+    )
+{
+    NTSTATUS            status;
+
+    IoMarkIrpPending(Irp);
+
+    status = STATUS_DEVICE_NOT_READY;
+    if (!NT_SUCCESS(status))
+        goto fail1;
+
+    return STATUS_PENDING;
+
+fail1:
+    Error("fail1 (%08x)\n", status);
+
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+}
+
+static DECLSPEC_NOINLINE NTSTATUS
+PdoDispatchControl(
+    IN  PXENCONS_PDO    Pdo,
+    IN  PIRP            Irp
+    )
+{
+    PIO_STACK_LOCATION  StackLocation;
+    ULONG               IoControlCode;
+    ULONG               InputBufferLength;
+    ULONG               OutputBufferLength;
+    PVOID               Buffer;
+    PCHAR               Value;
+    ULONG               Length;
+    NTSTATUS            status;
+
+    UNREFERENCED_PARAMETER(Pdo);
+
+    StackLocation = IoGetCurrentIrpStackLocation(Irp);
+    IoControlCode = StackLocation->Parameters.DeviceIoControl.IoControlCode;
+    InputBufferLength = StackLocation->Parameters.DeviceIoControl.InputBufferLength;
+    OutputBufferLength = StackLocation->Parameters.DeviceIoControl.OutputBufferLength;
+    Buffer = Irp->AssociatedIrp.SystemBuffer;
+
+    switch (IoControlCode) {
+    case IOCTL_XENCONS_GET_INSTANCE:
+        Value = __PdoGetName(Pdo);
+        break;
+    case IOCTL_XENCONS_GET_NAME:
+        Value = "non-default"; // use xenstore value
+        break;
+    case IOCTL_XENCONS_GET_PROTOCOL:
+        Value = "vt100"; // use xenstore value
+        break;
+    default:
+        status = STATUS_NOT_SUPPORTED;
+        goto fail1;
+    }
+    Length = (ULONG)strlen(Value);
+
+    status = STATUS_INVALID_PARAMETER;
+    if (InputBufferLength != 0)
+        goto fail2;
+
+    Irp->IoStatus.Information = Length;
+
+    status = STATUS_INVALID_BUFFER_SIZE;
+    if (OutputBufferLength == 0)
+        goto done;
+
+    RtlZeroMemory(Buffer, OutputBufferLength);
+
+    if (OutputBufferLength < Length)
+        goto fail3;
+
+    RtlCopyMemory(Buffer, Value, Length);
+    status = STATUS_SUCCESS;
+
+done:
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+
+fail3:
+    Error("fail3\n");
+
+fail2:
+    Error("fail2\n");
+
+fail1:
+    Error("fail1 (%08x)\n", status);
+
+    Irp->IoStatus.Status = status;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return status;
+}
+
+static DECLSPEC_NOINLINE NTSTATUS
 PdoDispatchDefault(
     IN  PXENCONS_PDO    Pdo,
     IN  PIRP            Irp
@@ -1595,6 +1772,27 @@ PdoDispatch(
 
     case IRP_MJ_POWER:
         status = PdoDispatchPower(Pdo, Irp);
+        break;
+
+    case IRP_MJ_CREATE:
+        status = PdoDispatchCreate(Pdo, Irp);
+        break;
+
+    case IRP_MJ_CLEANUP:
+        status = PdoDispatchCleanup(Pdo, Irp);
+        break;
+
+    case IRP_MJ_CLOSE:
+        status = PdoDispatchClose(Pdo, Irp);
+        break;
+
+    case IRP_MJ_READ:
+    case IRP_MJ_WRITE:
+        status = PdoDispatchReadWrite(Pdo, Irp);
+        break;
+
+    case IRP_MJ_DEVICE_CONTROL:
+        status = PdoDispatchControl(Pdo, Irp);
         break;
 
     default:
@@ -1763,6 +1961,7 @@ PdoDestroy(
 
     (VOID)__PdoClearEjectRequested(Pdo);
 
+    RtlFreeUnicodeString(&Dx->Link);
     Dx->Pdo = NULL;
 
     RtlZeroMemory(&Pdo->SuspendInterface,
