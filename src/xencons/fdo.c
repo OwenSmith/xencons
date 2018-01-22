@@ -100,6 +100,8 @@ struct _XENCONS_FDO {
     XENBUS_SUSPEND_INTERFACE    SuspendInterface;
     XENBUS_STORE_INTERFACE      StoreInterface;
     XENBUS_CONSOLE_INTERFACE    ConsoleInterface;
+    XENBUS_EVTCHN_INTERFACE     EvtchnInterface;
+    XENBUS_GNTTAB_INTERFACE     GnttabInterface;
 
     PXENBUS_SUSPEND_CALLBACK    SuspendCallbackLate;
 };
@@ -3140,6 +3142,8 @@ DEFINE_FDO_GET_INTERFACE(Debug, PXENBUS_DEBUG_INTERFACE)
 DEFINE_FDO_GET_INTERFACE(Suspend, PXENBUS_SUSPEND_INTERFACE)
 DEFINE_FDO_GET_INTERFACE(Store, PXENBUS_STORE_INTERFACE)
 DEFINE_FDO_GET_INTERFACE(Console, PXENBUS_CONSOLE_INTERFACE)
+DEFINE_FDO_GET_INTERFACE(Evtchn, PXENBUS_EVTCHN_INTERFACE)
+DEFINE_FDO_GET_INTERFACE(Gnttab, PXENBUS_GNTTAB_INTERFACE)
 
 #pragma warning(push)
 #pragma warning(disable:6014) // Leaking memory '&Dx->Link'
@@ -3252,9 +3256,27 @@ FdoCreate(
     if (!NT_SUCCESS(status))
         goto fail11;
 
-    status = ConsoleCreate(Fdo, &Fdo->Console);
+    status = FDO_QUERY_INTERFACE(Fdo,
+                                 XENBUS,
+                                 EVTCHN,
+                                 (PINTERFACE)&Fdo->EvtchnInterface,
+                                 sizeof(Fdo->EvtchnInterface),
+                                 FALSE);
     if (!NT_SUCCESS(status))
         goto fail12;
+
+    status = FDO_QUERY_INTERFACE(Fdo,
+                                 XENBUS,
+                                 GNTTAB,
+                                 (PINTERFACE)&Fdo->GnttabInterface,
+                                 sizeof(Fdo->GnttabInterface),
+                                 FALSE);
+    if (!NT_SUCCESS(status))
+        goto fail13;
+
+    status = ConsoleCreate(Fdo, &Fdo->Console);
+    if (!NT_SUCCESS(status))
+        goto fail14;
 
     FunctionDeviceObject->Flags |= DO_BUFFERED_IO;
 
@@ -3271,6 +3293,18 @@ FdoCreate(
 
     FunctionDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
     return STATUS_SUCCESS;
+
+fail14:
+    Error("fail14\n");
+
+    RtlZeroMemory(&Fdo->GnttabInterface,
+                  sizeof(XENBUS_GNTTAB_INTERFACE));
+
+fail13:
+    Error("fail13\n");
+
+    RtlZeroMemory(&Fdo->EvtchnInterface,
+                  sizeof(XENBUS_EVTCHN_INTERFACE));
 
 fail12:
     Error("fail12\n");
@@ -3373,6 +3407,12 @@ FdoDestroy(
 
     ConsoleDestroy(Fdo->Console);
     Fdo->Console = NULL;
+
+    RtlZeroMemory(&Fdo->GnttabInterface,
+                  sizeof(XENBUS_GNTTAB_INTERFACE));
+
+    RtlZeroMemory(&Fdo->EvtchnInterface,
+                  sizeof(XENBUS_EVTCHN_INTERFACE));
 
     RtlZeroMemory(&Fdo->ConsoleInterface,
                   sizeof (XENBUS_CONSOLE_INTERFACE));

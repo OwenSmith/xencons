@@ -40,6 +40,7 @@
 
 #include "driver.h"
 #include "frontend.h"
+#include "ring.h"
 #include "thread.h"
 #include "dbg_print.h"
 #include "assert.h"
@@ -62,6 +63,7 @@ struct _XENCONS_FRONTEND {
 
     PCHAR                       Name;
     PCHAR                       Protocol;
+    PXENCONS_RING               Ring;
 
     XENBUS_DEBUG_INTERFACE      DebugInterface;
     XENBUS_SUSPEND_INTERFACE    SuspendInterface;
@@ -664,9 +666,9 @@ FrontendConnect(
     if (!NT_SUCCESS(status))
         goto fail2;
 
-    //status = RingConnect(Frontend->Ring);
-    //if (!NT_SUCCESS(status))
-    //    goto fail3;
+    status = RingConnect(Frontend->Ring);
+    if (!NT_SUCCESS(status))
+        goto fail3;
 
     Attempt = 0;
     do {
@@ -678,9 +680,9 @@ FrontendConnect(
         if (!NT_SUCCESS(status))
             break;
 
-        //status = RingStoreWrite(Frontend->Ring, Transaction);
-        //if (!NT_SUCCESS(status))
-        //    goto abort;
+        status = RingStoreWrite(Frontend->Ring, Transaction);
+        if (!NT_SUCCESS(status))
+            goto abort;
 
         status = XENBUS_STORE(TransactionEnd,
                               &Frontend->StoreInterface,
@@ -691,12 +693,12 @@ FrontendConnect(
 
         continue;
 
-    //abort:
-    //    (VOID)XENBUS_STORE(TransactionEnd,
-    //                       &Frontend->StoreInterface,
-    //                       Transaction,
-    //                       FALSE);
-    //    break;
+    abort:
+        (VOID)XENBUS_STORE(TransactionEnd,
+                           &Frontend->StoreInterface,
+                           Transaction,
+                           FALSE);
+        break;
     } while (status == STATUS_RETRY);
 
     if (!NT_SUCCESS(status))
@@ -747,8 +749,8 @@ fail5:
 fail4:
     Error("fail4\n");
 
-//fail3:
-//    Error("fail3\n");
+fail3:
+    Error("fail3\n");
 
     XENBUS_DEBUG(Deregister,
                  &Frontend->DebugInterface,
@@ -780,7 +782,7 @@ FrontendDisconnect(
     __FrontendFree(Frontend->Name);
     Frontend->Name = NULL;
 
-    //RingDisconnect(Frontend->Ring);
+    RingDisconnect(Frontend->Ring);
 
     XENBUS_DEBUG(Deregister,
                  &Frontend->DebugInterface,
@@ -797,13 +799,21 @@ FrontendEnable(
     IN  PXENCONS_FRONTEND   Frontend
     )
 {
+    NTSTATUS                status;
+
     Trace("====>\n");
 
-    UNREFERENCED_PARAMETER(Frontend);
-    //RingEnable(Frontend->Ring);
+    status = RingEnable(Frontend->Ring);
+    if (!NT_SUCCESS(status))
+        goto fail1;
 
     Trace("<====\n");
     return STATUS_SUCCESS;
+
+fail1:
+    Error("fail1 (%08x)\n", status);
+
+    return status;
 }
 
 static VOID
@@ -813,8 +823,7 @@ FrontendDisable(
 {
     Trace("====>\n");
 
-    UNREFERENCED_PARAMETER(Frontend);
-    //RingDisable(Frontend->Ring);
+    RingDisable(Frontend->Ring);
 
     Trace("<====\n");
 }
@@ -1204,7 +1213,18 @@ FrontendCreate(
     if (!NT_SUCCESS(status))
         goto fail4;
 
+    status = RingCreate(*Frontend, &(*Frontend)->Ring);
+    if (!NT_SUCCESS(status))
+        goto fail5;
+
     return STATUS_SUCCESS;
+
+fail5:
+    Error("fail5\n");
+
+    ThreadAlert((*Frontend)->EjectThread);
+    ThreadJoin((*Frontend)->EjectThread);
+    (*Frontend)->EjectThread = NULL;
 
 fail4:
     Error("fail4\n");
@@ -1255,6 +1275,9 @@ FrontendDestroy(
     ASSERT3U(KeGetCurrentIrql(), == , PASSIVE_LEVEL);
 
     ASSERT(Frontend->State == FRONTEND_UNKNOWN);
+
+    RingDestroy(Frontend->Ring);
+    Frontend->Ring = NULL;
 
     ThreadAlert(Frontend->EjectThread);
     ThreadJoin(Frontend->EjectThread);
