@@ -44,6 +44,7 @@
 #include "driver.h"
 #include "registry.h"
 #include "frontend.h"
+#include "ring.h"
 #include "thread.h"
 #include "dbg_print.h"
 #include "assert.h"
@@ -1609,8 +1610,8 @@ PdoDispatchCreate(
 
     StackLocation = IoGetCurrentIrpStackLocation(Irp);
 
-    status = FrontendDispatchCreate(Pdo->Frontend,
-                                    StackLocation->FileObject);
+    status = RingDispatchCreate(FrontendGetRing(Pdo->Frontend),
+                                StackLocation->FileObject);
 
     Irp->IoStatus.Status = status;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -1629,8 +1630,8 @@ PdoDispatchCleanup(
 
     StackLocation = IoGetCurrentIrpStackLocation(Irp);
 
-    status = FrontendDispatchCleanup(Pdo->Frontend,
-                                     StackLocation->FileObject);
+    status = RingDispatchCleanup(FrontendGetRing(Pdo->Frontend),
+                                 StackLocation->FileObject);
 
     Irp->IoStatus.Status = status;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
@@ -1666,7 +1667,7 @@ PdoDispatchReadWrite(
 
     IoMarkIrpPending(Irp);
 
-    status = FrontendDispatchReadWrite(Pdo->Frontend, Irp);
+    status = RingDispatchReadWrite(FrontendGetRing(Pdo->Frontend), Irp);
     if (!NT_SUCCESS(status))
         goto fail1;
 

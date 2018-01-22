@@ -75,4 +75,22 @@ RingDisconnect(
     IN  PXENCONS_RING   Ring
     );
 
+extern NTSTATUS
+RingDispatchCreate(
+    IN  PXENCONS_RING   Frontend,
+    IN  PFILE_OBJECT    FileObject
+    );
+
+extern NTSTATUS
+RingDispatchCleanup(
+    IN  PXENCONS_RING   Ring,
+    IN  PFILE_OBJECT    FileObject
+    );
+
+extern NTSTATUS
+RingDispatchReadWrite(
+    IN  PXENCONS_RING   Ring,
+    IN  PIRP            Irp
+    );
+
 #endif // _XENCONS_RING_H

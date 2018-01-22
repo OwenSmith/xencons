@@ -223,37 +223,20 @@ FrontendGetProtocol(
     return Frontend->Protocol;
 }
 
-NTSTATUS
-FrontendDispatchCreate(
-    IN  PXENCONS_FRONTEND   Frontend,
-    IN  PFILE_OBJECT        FileObject
+static FORCEINLINE PXENCONS_RING
+__FrontendGetRing(
+    IN  PXENCONS_FRONTEND   Frontend
     )
 {
-    UNREFERENCED_PARAMETER(Frontend);
-    UNREFERENCED_PARAMETER(FileObject);
-    return STATUS_SUCCESS;
+    return Frontend->Ring;
 }
 
-NTSTATUS
-FrontendDispatchCleanup(
-    IN  PXENCONS_FRONTEND   Frontend,
-    IN  PFILE_OBJECT        FileObject
+PXENCONS_RING
+FrontendGetRing(
+    IN  PXENCONS_FRONTEND   Frontend
     )
 {
-    UNREFERENCED_PARAMETER(Frontend);
-    UNREFERENCED_PARAMETER(FileObject);
-    return STATUS_SUCCESS;
-}
-
-NTSTATUS
-FrontendDispatchReadWrite(
-    IN  PXENCONS_FRONTEND   Frontend,
-    IN  PIRP                Irp
-    )
-{
-    UNREFERENCED_PARAMETER(Frontend);
-    UNREFERENCED_PARAMETER(Irp);
-    return STATUS_DEVICE_NOT_READY;
+    return __FrontendGetRing(Frontend);
 }
 
 static VOID

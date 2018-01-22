@@ -38,6 +38,8 @@
 
 typedef struct _XENCONS_FRONTEND XENCONS_FRONTEND, *PXENCONS_FRONTEND;
 
+#include "ring.h"
+
 typedef enum _FRONTEND_STATE {
     FRONTEND_UNKNOWN,
     FRONTEND_CLOSED,
@@ -103,22 +105,9 @@ FrontendGetProtocol(
     IN  PXENCONS_FRONTEND   Frontend
     );
 
-extern NTSTATUS
-FrontendDispatchCreate(
-    IN  PXENCONS_FRONTEND   Frontend,
-    IN  PFILE_OBJECT        FileObject
-    );
-
-extern NTSTATUS
-FrontendDispatchCleanup(
-    IN  PXENCONS_FRONTEND   Frontend,
-    IN  PFILE_OBJECT        FileObject
-    );
-
-extern NTSTATUS
-FrontendDispatchReadWrite(
-    IN  PXENCONS_FRONTEND   Frontend,
-    IN  PIRP                Irp
+extern PXENCONS_RING
+FrontendGetRing(
+    IN  PXENCONS_FRONTEND   Frontend
     );
 
 #endif  // _XENCONS_FRONTEND_H
