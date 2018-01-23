@@ -1228,10 +1228,6 @@ __FdoD3ToD0(
 
     ASSERT3U(KeGetCurrentIrql(), ==, DISPATCH_LEVEL);
 
-    status = ConsoleEnable(Fdo->Console);
-    if (!NT_SUCCESS(status))
-        goto fail1;
-
     status = XENBUS_STORE(WatchAdd,
                           &Fdo->StoreInterface,
                           "device",
@@ -1239,7 +1235,7 @@ __FdoD3ToD0(
                           ThreadGetEvent(Fdo->ScanThread),
                           &Fdo->ScanWatch);
     if (!NT_SUCCESS(status))
-        goto fail2;
+        goto fail1;
 
     (VOID)XENBUS_STORE(Printf,
                        &Fdo->StoreInterface,
@@ -1254,11 +1250,6 @@ __FdoD3ToD0(
     Trace("<====\n");
 
     return STATUS_SUCCESS;
-
-fail2:
-    Error("fail2\n");
-
-    ConsoleDisable(Fdo->Console);
 
 fail1:
     Error("fail1 (%08x)\n", status);
@@ -1287,8 +1278,6 @@ __FdoD0ToD3(
                        &Fdo->StoreInterface,
                        Fdo->ScanWatch);
     Fdo->ScanWatch = NULL;
-
-    ConsoleDisable(Fdo->Console);
 
     Trace("<====\n");
 }
@@ -1348,6 +1337,10 @@ FdoD3ToD0(
 
     KeLowerIrql(Irql);
 
+    status = ConsoleEnable(Fdo->Console);
+    if (!NT_SUCCESS(status))
+        goto fail5;
+
     __FdoSetDevicePowerState(Fdo, PowerDeviceD0);
 
     PowerState.DeviceState = PowerDeviceD0;
@@ -1377,6 +1370,11 @@ FdoD3ToD0(
     Trace("<====\n");
 
     return STATUS_SUCCESS;
+
+fail5:
+    Error("fail5\n");
+
+    KeRaiseIrql(DISPATCH_LEVEL, &Irql);
 
 fail4:
     Error("fail4\n");
@@ -1446,6 +1444,8 @@ FdoD0ToD3(
                     PowerState);
 
     __FdoSetDevicePowerState(Fdo, PowerDeviceD3);
+
+    ConsoleDisable(Fdo->Console);
 
     KeRaiseIrql(DISPATCH_LEVEL, &Irql);
 
