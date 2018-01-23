@@ -892,7 +892,7 @@ PdoQueryDeviceText(
         status = RtlStringCbPrintfW(Buffer,
                                     MAXTEXTLEN,
                                     L"%hs PV Console #%hs",
-                                    FdoGetName(__PdoGetFdo(Pdo)),
+                                    PRODUCT_NAME_STR,
                                     __PdoGetName(Pdo));
         ASSERT(NT_SUCCESS(status));
 
