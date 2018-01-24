@@ -1673,10 +1673,8 @@ PdoDispatchReadWrite(
 {
     NTSTATUS            status;
 
-    IoMarkIrpPending(Irp);
-
     status = RingDispatchReadWrite(FrontendGetRing(Pdo->Frontend), Irp);
-    if (!NT_SUCCESS(status))
+    if (status != STATUS_PENDING)
         goto fail1;
 
     return STATUS_PENDING;

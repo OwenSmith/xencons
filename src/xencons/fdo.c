@@ -2871,11 +2871,9 @@ FdoDispatchReadWrite(
 {
     NTSTATUS            status;
 
-    IoMarkIrpPending(Irp);
-
     status = ConsoleDispatchReadWrite(Fdo->Console,
                                       Irp);
-    if (!NT_SUCCESS(status))
+    if (status != STATUS_PENDING)
         goto fail1;
 
     return STATUS_PENDING;

@@ -221,11 +221,12 @@ ConsoleDispatchReadWrite(
     if (Handle == NULL)
         goto fail1;
 
+    // If StreamPutQueue succeeds, the IRP is queued and marked pending
     status = StreamPutQueue(Handle->Stream, Irp);
     if (!NT_SUCCESS(status))
         goto fail2;
 
-    return STATUS_SUCCESS;
+    return STATUS_PENDING;
 
 fail2:
     Error("fail2\n");

@@ -560,6 +560,7 @@ RingDispatchReadWrite(
         if (StackLocation->Parameters.Read.Length == 0)
             break;
         status = IoCsqInsertIrpEx(&Ring->Read.Csq, Irp, NULL, (PVOID)FALSE);
+        ASSERT(NT_SUCCESS(status));
         break;
 
     case IRP_MJ_WRITE:
@@ -567,14 +568,23 @@ RingDispatchReadWrite(
         if (StackLocation->Parameters.Write.Length == 0)
             break;
         status = IoCsqInsertIrpEx(&Ring->Write.Csq, Irp, NULL, (PVOID)FALSE);
+        ASSERT(NT_SUCCESS(status));
         break;
 
     default:
         status = STATUS_NOT_SUPPORTED;
         break;
     }
-    if (NT_SUCCESS(status))
-        KeInsertQueueDpc(&Ring->Dpc, NULL, NULL);
+    if (!NT_SUCCESS(status))
+        goto fail1;
+
+    KeInsertQueueDpc(&Ring->Dpc, NULL, NULL);
+
+    // IoCsqInsertIrpEx has marked the IRP pending, must return STATUS_PENDING
+    return STATUS_PENDING;
+
+fail1:
+    Error("fail1 (%08x)\n", status);
 
     return status;
 }
