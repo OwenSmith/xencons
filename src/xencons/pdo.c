@@ -433,6 +433,8 @@ PdoD3ToD0(
     KIRQL               Irql;
     NTSTATUS            status;
 
+    Trace("=====>\n");
+
     ASSERT3U(KeGetCurrentIrql(), == , PASSIVE_LEVEL);
 
     KeRaiseIrql(DISPATCH_LEVEL, &Irql);
@@ -458,6 +460,8 @@ PdoD3ToD0(
 
 #pragma prefast(suppress:28123)
     (VOID) IoSetDeviceInterfaceState(&Pdo->Dx->Link, TRUE);
+
+    Trace("<=====\n");
 
     return STATUS_SUCCESS;
 
@@ -487,6 +491,8 @@ PdoD0ToD3(
 {
     KIRQL               Irql;
 
+    Trace("=====>\n");
+
     ASSERT3U(KeGetCurrentIrql(), == , PASSIVE_LEVEL);
 
 #pragma prefast(suppress:28123)
@@ -504,6 +510,8 @@ PdoD0ToD3(
     XENBUS_SUSPEND(Release, &Pdo->SuspendInterface);
 
     KeLowerIrql(Irql);
+
+    Trace("<=====\n");
 }
 
 // This function must not touch pageable code or data
@@ -1838,7 +1846,15 @@ PdoResume(
     IN  PXENCONS_PDO    Pdo
     )
 {
-    return FrontendResume(Pdo->Frontend);
+    NTSTATUS            status;
+
+    Trace("=====>\n");
+
+    status = FrontendResume(Pdo->Frontend);
+
+    Trace("<=====\n");
+
+    return status;
 }
 
 VOID
@@ -1846,7 +1862,13 @@ PdoSuspend(
     IN  PXENCONS_PDO    Pdo
     )
 {
+    Trace("=====>\n");
+
+    if (__PdoGetDevicePowerState(Pdo) == PowerDeviceD0)
+        PdoD0ToD3(Pdo);
     FrontendSuspend(Pdo->Frontend);
+
+    Trace("<=====\n");
 }
 
 NTSTATUS
